@@ -7,10 +7,21 @@ import os.path
 import argparse
 from zoneinfo import ZoneInfo
 
-#Check argments for --real flag
+#Check argments for --real flag and --tomorrow
 parser = argparse.ArgumentParser(description="POS Printer Script")
 parser.add_argument('--real', action='store_true', help='Send output to physical USB printer')
+parser.add_argument('--tomorrow', action='store_true', help='Generate receipt for tomorrow [IN ADVANCE]')
 args = parser.parse_args()
+
+#Configure the date for today or tomorrow based on the --tomorrow flag
+local_tz = ZoneInfo("America/Toronto")                   # MOVED UP: Defined tz early
+target_date = datetime.datetime.now(tz=local_tz).date()  # ADDED: Initialize target_date before adding to it
+
+if args.tomorrow:
+    target_date += datetime.timedelta(days=1)
+date_str = target_date.strftime("%A, %b %d")
+if args.tomorrow:
+    date_str += " [IN ADVANCE]"
 
 #Configure the printer (if --real flag is set)
 p = None
@@ -25,6 +36,7 @@ def pos_print(text=""):
     print(text) # Always prints to standard out (captured by NiceGUI web dashboard)
     if p is not None:
         p.text(text + "\n") # Only prints to hardware if --real flag is enabled
+
 
 # Google Calendar API Setup
 from google.auth.transport.requests import Request
@@ -53,15 +65,14 @@ shared_creds = get_credentials()
 
 #Set up time zone for Montreal
 # --- TIMEZONE & DATE SETUP (Global so Calendar and Date/Time can both use them) ---
-local_tz = ZoneInfo("America/Toronto")
-today = datetime.datetime.now(tz=local_tz).date()
-start_of_day = datetime.datetime.combine(today, datetime.time.min, tzinfo=local_tz)
-end_of_day = datetime.datetime.combine(today, datetime.time.max, tzinfo=local_tz)
+# MODIFIED: Use target_date instead of hardcoded 'today'
+start_of_day = datetime.datetime.combine(target_date, datetime.time.min, tzinfo=local_tz)
+end_of_day = datetime.datetime.combine(target_date, datetime.time.max, tzinfo=local_tz)
 
 # -- CURRENT TIME--  
 def get_current_timedate():
     now = datetime.datetime.now(tz=local_tz)
-    pos_print("DATE: " + now.strftime("%A, %b %d"))
+    pos_print("DATE: " + date_str) # MODIFIED: Use the formatted string we created at the top
     pos_print("TIME: Printed at " + now.strftime("%H:%M") + "\n")
 
 
@@ -69,7 +80,12 @@ def get_current_timedate():
 async def getWeather() -> None:
     async with python_weather.Client(unit=python_weather.METRIC) as client:
         weather = await client.get("Montreal")
-        pos_print("Temp: " + str(weather.daily_forecasts[0].lowest_temperature) + " / " + str(weather.daily_forecasts[0].highest_temperature) + " °C")
+        
+        # MODIFIED: Pick index 0 for today, index 1 for tomorrow
+        day_idx = 1 if args.tomorrow else 0
+        forecast = list(weather.daily_forecasts)[day_idx]
+        
+        pos_print("Temp: " + str(forecast.lowest_temperature) + " / " + str(forecast.highest_temperature) + " °C")
         pos_print("Rain: " + str(weather.precipitation) + " mm (" + str(weather.description) + ")\n")
 
 # --- GOOGLE CALENDAR ---
@@ -226,10 +242,6 @@ pos_print("\n================================")
 pos_print("     3. DEADLINES & TASKS"       )
 pos_print("================================")
 getGoogleSheet(shared_creds)
-
-
-
-
 
 # Feed a few blank lines to clear the tear-bar
 pos_print("\n\n\n")
