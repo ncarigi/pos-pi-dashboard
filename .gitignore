@@ -1,0 +1,42 @@
+cat << 'EOF' > ~/.gitignore
+# --- SECRETS & KEYS ---
+*.conf
+credentials*
+token*
+*.key
+*.pem
+
+# --- SYSTEM & USER DIRS ---
+Desktop/
+Documents/
+Downloads/
+Music/
+Pictures/
+Public/
+Templates/
+Videos/
+.cache/
+.config/
+.local/
+.bash*
+.profile
+.Xauthority
+.xsession-errors*
+.python_history
+.sudo_as_admin_successful
+
+# --- PYTHON VENV & JUNK ---
+myenv/
+path/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# --- LOCAL PERSONAL DATA ---
+personal.json
+tasks.json
+.DS_Store
+EOF
+.ssh/
+.gitconfig
