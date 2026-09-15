@@ -3,10 +3,6 @@ import subprocess
 import asyncio
 
 def router():
-    @ui.page('/tommorow')
-    def tomorrow_page():
-        pass  # Route registration placeholder
-
     @ui.page('/tomorrow')
     async def tomorrow_summary(client: Client):
         with ui.column().classes('p-4 sm:p-8 w-full max-w-[375px] mx-auto items-center'):
@@ -19,7 +15,6 @@ def router():
                 await asyncio.sleep(0.2)
                 
                 try:
-                    # Added --tomorrow and --real flags
                     physical_result = await asyncio.to_thread(
                         subprocess.run,
                         ['python3', '/home/ncarigi/print_manager.py', '--tomorrow', '--real'],
@@ -38,7 +33,7 @@ def router():
 
             # Navigation & Actions
             ui.button('Back to Home', on_click=lambda: ui.navigate.to('/')).classes('mb-4 bg-gray-500 text-white')
-            ui.button('🖨️ Print Tomorrow', on_click=print_to_hardware, color='purple').classes('w-full max-w-sm mt-4 font-bold py-3 shadow-md')
+            ui.button('🖨️ Print Tomorrow Summary', on_click=print_to_hardware, color='purple').classes('w-full max-w-sm mt-4 font-bold py-3 shadow-md')
 
             receipt_container = ui.column().classes('w-full max-w-sm items-center mt-4')
             with receipt_container:

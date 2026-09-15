@@ -1,0 +1,40 @@
+{
+  "bank": {
+    "beef and rice": 0,
+    "Potatoes": 1,
+    "Beef pasta": 0,
+    "Chicken wraps": 0,
+    "pork chops": 0,
+    "chicken tighs": 0
+  },
+  "schedule": {
+    "2026-09-15": {
+      "Lunch": [
+        "Chicken wraps"
+      ],
+      "Dinner": [
+        "beef and rice"
+      ]
+    },
+    "2026-09-17": {
+      "Lunch": [
+        "Chicken wraps"
+      ],
+      "Dinner": [
+        "beef and rice"
+      ]
+    },
+    "2026-09-16": {
+      "Lunch": [
+        "Chicken wraps"
+      ],
+      "Dinner": []
+    },
+    "2026-09-18": {
+      "Lunch": [
+        "Chicken wraps"
+      ],
+      "Dinner": []
+    }
+  }
+}

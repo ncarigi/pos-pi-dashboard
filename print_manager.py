@@ -6,6 +6,7 @@ import asyncio
 import os.path
 import argparse
 from zoneinfo import ZoneInfo
+import json
 
 #Check argments for --real flag and --tomorrow
 parser = argparse.ArgumentParser(description="POS Printer Script")
@@ -45,7 +46,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly",
-          "https://www.googleapis.com/auth/spreadsheets.readonly"]
+          "https://www.googleapis.com/auth/spreadsheets.readonly",
+          "https://www.googleapis.com/auth/tasks"
+          ]
 
 #Authenticate
 def get_credentials():
@@ -136,112 +139,214 @@ def getCalendar(creds):
 # --- GOOGLE SHEETS ---
 def getGoogleSheet(creds):
     try:
-        # Print the section header
-        pos_print(f"{'School':<16}{'[days remaining]':>16}")
-
         service = build("sheets", "v4", credentials=creds)
         
         SPREADSHEET_ID = "1eLJQG5i7mBBbESRawSpsIlIUq1V3HA8VzU6MFlrBplE"
-        RANGE_NAME = "'Fall 26'!S24:U100"  # S: Class, T: Task, U: Due Tag
+        RANGES = ["'Fall 26'!S24:U100", "'Fall 26'!W35:Y100"] 
         
-        sheet_result = service.spreadsheets().values().get(
-            spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME
+        sheet_result = service.spreadsheets().values().batchGet(
+            spreadsheetId=SPREADSHEET_ID, ranges=RANGES
         ).execute()
         
-        rows = sheet_result.get("values", [])
-        if not rows:
-            pos_print("No tasks found in sheet.")
-            return
+        value_ranges = sheet_result.get("valueRanges", [])
+        assignments_rows = value_ranges[0].get("values", []) if len(value_ranges) > 0 else []
+        exams_rows = value_ranges[1].get("values", []) if len(value_ranges) > 1 else []
 
         MAX_WIDTH = 32
         prefix = "[   ] "
         indent_space = "      "  # Exactly 6 spaces to align under the task name
 
-        for row in rows:
-            if not row or not any(row):
-                continue
-                
-            # Safely grab columns S, T, and U even if some trailing cells are empty
-            class_col = row[0].strip() if len(row) > 0 and row[0] else ""
-            task_col = row[1].strip() if len(row) > 1 and row[1] else ""
-            raw_tag = row[2].strip() if len(row) > 2 and row[2] else ""
-            
-            # Drop the course number (take only the first word, e.g., "COEN 244" -> "COEN")
-            category = class_col.split()[0] if class_col else ""
-
-            # Combine Category and Task into one clean string (e.g., "COEN: C++ Lab 3")
-            if category and task_col:
-                task = f"{category}: {task_col}"
-            elif category:
-                task = category
-            else:
-                task = task_col
-            
-            if not task:
-                continue
-
-            # Use raw tag directly in brackets (e.g., [1], [4])
-            tag_str = f"[{raw_tag}]" if raw_tag else ""
-
-            if tag_str:
-                max_task_on_line1 = MAX_WIDTH - len(prefix) - 1 - len(tag_str)
-                
-                if len(task) <= max_task_on_line1:
-                    # Task fits completely on line 1, right-align the tag against column 32
-                    space_count = MAX_WIDTH - len(prefix) - len(task) - len(tag_str)
-                    line = f"{prefix}{task}{' ' * space_count}{tag_str}"
-                    pos_print(line)
-                else:
-                    # Task is too long, fill line 1 to the limit and push tag to the right edge
-                    chunk = task[:max_task_on_line1]
-                    line1 = f"{prefix}{chunk} {tag_str}"
-                    pos_print(line1)
+        def print_tasks(rows):
+            count = 0
+            for row in rows:
+                if not row or not any(row):
+                    continue
                     
-                    # Wrap remaining task text onto subsequent lines with 6-space indent
-                    remaining_task = task[max_task_on_line1:]
-                    wrapped_remaining = textwrap.wrap(
-                        remaining_task,
+                class_col = row[0].strip() if len(row) > 0 and row[0] else ""
+                task_col = row[1].strip() if len(row) > 1 and row[1] else ""
+                raw_tag = row[2].strip() if len(row) > 2 and row[2] else ""
+                
+                category = class_col.split()[0] if class_col else ""
+
+                if category and task_col:
+                    task = f"{category}: {task_col}"
+                elif category:
+                    task = category
+                else:
+                    task = task_col
+                
+                if not task:
+                    continue
+
+                count += 1
+                tag_str = f"[{raw_tag}]" if raw_tag else ""
+
+                if tag_str:
+                    max_task_on_line1 = MAX_WIDTH - len(prefix) - 1 - len(tag_str)
+                    
+                    if len(task) <= max_task_on_line1:
+                        space_count = MAX_WIDTH - len(prefix) - len(task) - len(tag_str)
+                        line = f"{prefix}{task}{' ' * space_count}{tag_str}"
+                        pos_print(line)
+                    else:
+                        chunk = task[:max_task_on_line1]
+                        line1 = f"{prefix}{chunk} {tag_str}"
+                        pos_print(line1)
+                        
+                        remaining_task = task[max_task_on_line1:]
+                        wrapped_remaining = textwrap.wrap(
+                            remaining_task,
+                            width=MAX_WIDTH,
+                            initial_indent=indent_space,
+                            subsequent_indent=indent_space
+                        )
+                        for w_line in wrapped_remaining:
+                            pos_print(w_line)
+                else:
+                    full_text = f"{prefix}{task}"
+                    wrapped = textwrap.wrap(
+                        full_text,
                         width=MAX_WIDTH,
-                        initial_indent=indent_space,
+                        initial_indent="",
                         subsequent_indent=indent_space
                     )
-                    for w_line in wrapped_remaining:
+                    for w_line in wrapped:
                         pos_print(w_line)
-            else:
-                # No due tag present, just print normal wrapped text with indent
-                full_text = f"{prefix}{task}"
-                wrapped = textwrap.wrap(
-                    full_text,
-                    width=MAX_WIDTH,
-                    initial_indent="",
-                    subsequent_indent=indent_space
-                )
-                for w_line in wrapped:
-                    pos_print(w_line)
-                    
+            return count
+
+        # 1. ASSIGNMENTS SECTION
+        pos_print(f"{'Assignments':<16}{'[days remaining]':>16}")
+        if not assignments_rows:
+            pos_print("No assignments found.")
+        else:
+            printed = print_tasks(assignments_rows)
+            if printed == 0:
+                pos_print("No assignments pending.")
+
+        # 2. EXAMS & QUIZZES SECTION
+        # Pre-filter exams to only keep those within 7 days
+        upcoming_exams = []
+        for row in exams_rows:
+            if not row or not any(row):
+                continue
+            raw_tag = row[2].strip() if len(row) > 2 and row[2] else ""
+            try:
+                days_left = int(raw_tag)
+                if 0 <= days_left <= 7:
+                    upcoming_exams.append(row)
+            except ValueError:
+                continue
+
+        # Only print the header and the items if there is actually an upcoming exam
+        if upcoming_exams:
+            pos_print(f"\n{'Quiz/Exams':<16}{'[days remaining]':>16}")
+            print_tasks(upcoming_exams)
+                
     except HttpError as error:
         pos_print(f"Sheets API Error: {error}")
+
+# --- LOCAL TASKS ---
+def getTasks():
+    try:
+        pos_print("\nPersonal:")
+        with open('/home/ncarigi/personal.json', 'r') as f:
+            tasks = json.load(f)
+
+            
+        if not tasks:
+            pos_print("No sprint tasks for today.")
+            return
+
+        indent_space = "    "
+
+        for task in tasks:
+            task_text = task.get('task', '') if isinstance(task, dict) else str(task)
+            
+            # Check if the task has a completed date
+            is_done = task.get('completed_date') is not None if isinstance(task, dict) else False
+
+            # Swap the prefix based on whether it is done
+            prefix = "[ X ] " if is_done else "[   ] "
+
+            full_text = f"{prefix}{task_text}"
+            wrapped = textwrap.wrap(
+                full_text,
+                width=32,
+                initial_indent="",
+                subsequent_indent=indent_space
+            )
+            for w_line in wrapped:
+                pos_print(w_line)
+                
+    except FileNotFoundError:
+        pos_print("No personal.json file found.")
+    except Exception as e:
+        pos_print(f"Task Error: {e}")
+
+
+
+def getMeals():
+    if not os.path.exists("meals.json"):
+        pos_print("No meals.json file found.")
+        return
+        
+    try:
+        with open("meals.json", 'r') as f:
+            data = json.load(f)
+            
+        # Uses target_date so it automatically handles the --tomorrow flag
+        target_str = target_date.strftime("%Y-%m-%d")
+        
+        # Pull schedule dictionary for the targeted day
+        target_schedule = data.get("schedule", {}).get(target_str, {"Lunch": [], "Dinner": []})
+        
+        lunch_meals = target_schedule.get("Lunch", [])
+        dinner_meals = target_schedule.get("Dinner", [])
+        
+        lunch_str = ", ".join(lunch_meals) if lunch_meals else "Nothing planned"
+        dinner_str = ", ".join(dinner_meals) if dinner_meals else "Nothing planned"
+        
+        pos_print(f"LUNCH: {lunch_str}")
+        pos_print(f"DINNER: {dinner_str}")
+        
+    except Exception as e:
+        pos_print(f"Meal Error: {e}")
 
 # --- PRINT EXECUTION ---
 pos_print("================================")
 pos_print("          SYSTEM READY          ")
 pos_print("================================")
+
 get_current_timedate()
 
 pos_print("================================")
 pos_print("          1. WEATHER"            )
 pos_print("================================")
+
 asyncio.run(getWeather())
 
 pos_print("================================")
 pos_print("         2. SCHEDULE"            )
 pos_print("================================")
+
 getCalendar(shared_creds)
 
 pos_print("\n================================")
 pos_print("     3. DEADLINES & TASKS"       )
 pos_print("================================")
+
 getGoogleSheet(shared_creds)
+getTasks()
+
+pos_print("\n================================")
+pos_print("            4. MEALS            ")
+pos_print("================================")
+
+getMeals()
+
+pos_print("\n================================")
+pos_print("      5. PACKING LOAD OUT       ")
+pos_print("================================")
 
 # Feed a few blank lines to clear the tear-bar
 pos_print("\n\n\n")

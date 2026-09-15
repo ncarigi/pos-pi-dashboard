@@ -30,7 +30,7 @@ def home_page():
             ui.label('Today').classes('mt-3 text-lg font-bold text-gray-800')
 
         # TOMORROW APP (Purple tint)
-        with ui.card().tight().classes('w-full aspect-square flex flex-col items-center justify-center cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all rounded-3xl bg-purple-50 text-purple-500').on('click', lambda: ui.navigate.to('/tommorow')):
+        with ui.card().tight().classes('w-full aspect-square flex flex-col items-center justify-center cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all rounded-3xl bg-purple-50 text-purple-500').on('click', lambda: ui.navigate.to('/tomorrow')):
             ui.icon('calendar_month', size='4em')
             ui.label('Tomorrow').classes('mt-3 text-lg font-bold text-gray-800')
 
